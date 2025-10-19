@@ -3,6 +3,10 @@ import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
 
+// Rutas
+import userRoutes from "./routes/userRoute.js";
+import projectRoutes from "./routes/projectRoutes.js"; // 👈 nueva ruta
+
 dotenv.config();
 
 const app = express();
@@ -11,17 +15,20 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Conexión a MongoDB
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("✅ Conectado a MongoDB"))
     .catch((err) => console.error("❌ Error al conectar a MongoDB:", err));
 
-// Rutas
-import userRoutes from "./routes/userRoute.js";
+// Rutas principales
 app.use("/api/usuarios", userRoutes);
+app.use("/api/projects", projectRoutes); // 👈 aquí se agregan los proyectos
 
+// Ruta base
 app.get("/", (req, res) => {
     res.send("🚀 API funcionando correctamente");
 });
 
+// Servidor
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`🚀 Servidor corriendo en puerto ${PORT}`));
