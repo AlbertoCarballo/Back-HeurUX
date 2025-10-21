@@ -2,21 +2,28 @@ import Project from "../models/Project.js";
 import User from "../models/Users.js";
 
 /**
- * Crear un nuevo proyecto y asociarlo al usuario creador
+ * Crear un nuevo proyecto con testers opcionales
  */
 export const createProject = async (req, res) => {
     try {
-        const { name, URL, description, complexity, creatorId } = req.body;
+        const { name, URL, description, complexity, creatorEmail, testersEmails = [] } = req.body;
 
-        // Validar datos
-        if (!name || !URL || !description || !complexity || !creatorId) {
+        // Validar campos obligatorios
+        if (!name || !URL || !description || !complexity || !creatorEmail) {
             return res.status(400).json({ message: "Faltan campos obligatorios" });
         }
 
-        // Verificar que el usuario exista
-        const user = await User.findById(creatorId);
-        if (!user) {
-            return res.status(404).json({ message: "Usuario no encontrado" });
+        // Buscar o crear el usuario creador
+        let creator = await User.findOne({ id: creatorEmail });
+        if (!creator) {
+            creator = new User({
+                id: creatorEmail,
+                password: "",
+                name: "Invitado",
+                projects: [],
+                testing: []
+            });
+            await creator.save();
         }
 
         // Crear el proyecto
@@ -25,23 +32,37 @@ export const createProject = async (req, res) => {
             URL,
             description,
             complexity,
-            creator: user._id,
+            creator: creator.id, // guardamos email
+            testers: []
         });
 
-        // Guardar en la base de datos
-        const savedProject = await newProject.save();
+        // Procesar testers
+        for (const email of testersEmails) {
+            // Siempre agregamos al proyecto
+            newProject.testers.push({ id: email, answers: [] });
 
-        // Asociar el proyecto al usuario
-        user.projects.push(savedProject._id);
-        await user.save();
+            // Si el usuario existe, actualizar su arreglo testing
+            const tester = await User.findOne({ id: email });
+            if (tester) {
+                tester.testing.push(newProject.name);
+                await tester.save();
+            }
+        }
+
+        // Guardar el proyecto
+        await newProject.save();
+
+        // Asociar el proyecto al creador
+        creator.projects.push(newProject.name);
+        await creator.save();
 
         res.status(201).json({
-            message: "Proyecto creado exitosamente",
-            project: savedProject,
+            message: "Proyecto creado correctamente",
+            project: newProject,
         });
     } catch (error) {
-        console.error("Error al crear proyecto:", error);
-        res.status(500).json({ message: "Error al crear proyecto", error });
+        console.error("❌ Error al crear proyecto:", error);
+        res.status(500).json({ message: "Error al crear proyecto", error: error.message });
     }
 };
 
@@ -50,10 +71,9 @@ export const createProject = async (req, res) => {
  */
 export const getAllProjects = async (req, res) => {
     try {
-        const projects = await Project.find().populate("creator", "name id");
+        const projects = await Project.find();
         res.status(200).json(projects);
     } catch (error) {
-        console.error("Error al obtener proyectos:", error);
         res.status(500).json({ message: "Error al obtener proyectos", error });
     }
 };
@@ -63,11 +83,10 @@ export const getAllProjects = async (req, res) => {
  */
 export const getProjectById = async (req, res) => {
     try {
-        const project = await Project.findById(req.params.id).populate("creator", "name id");
+        const project = await Project.findById(req.params.id);
         if (!project) return res.status(404).json({ message: "Proyecto no encontrado" });
         res.status(200).json(project);
     } catch (error) {
-        console.error("Error al obtener proyecto:", error);
         res.status(500).json({ message: "Error al obtener proyecto", error });
     }
 };
@@ -95,7 +114,6 @@ export const updateProject = async (req, res) => {
             project: updatedProject,
         });
     } catch (error) {
-        console.error("Error al actualizar proyecto:", error);
         res.status(500).json({ message: "Error al actualizar proyecto", error });
     }
 };
@@ -106,21 +124,22 @@ export const updateProject = async (req, res) => {
 export const deleteProject = async (req, res) => {
     try {
         const { id } = req.params;
-
         const project = await Project.findById(id);
         if (!project) return res.status(404).json({ message: "Proyecto no encontrado" });
 
-        // Eliminar la referencia del usuario
-        await User.findByIdAndUpdate(project.creator, {
-            $pull: { projects: project._id },
-        });
+        // Eliminar la referencia del creador (por email)
+        await User.updateOne({ id: project.creator }, { $pull: { projects: project.name } });
+
+        // Eliminar la referencia del proyecto en testers
+        for (const tester of project.testers) {
+            await User.updateOne({ id: tester.id }, { $pull: { testing: project.name } });
+        }
 
         // Eliminar el proyecto
         await Project.findByIdAndDelete(id);
 
         res.status(200).json({ message: "Proyecto eliminado correctamente" });
     } catch (error) {
-        console.error("Error al eliminar proyecto:", error);
         res.status(500).json({ message: "Error al eliminar proyecto", error });
     }
 };
