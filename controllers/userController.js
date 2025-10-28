@@ -27,22 +27,35 @@ export const obtenerUsuarioPorEmail = async (req, res) => {
     }
 };
 
-// ✅ Crear un nuevo usuario
+// ✅ Crear un nuevo usuario (con campos opcionales)
 export const crearUsuario = async (req, res) => {
     try {
-        const { id, password, name } = req.body;
+        const { id, password, name, experiences, phone, grades } = req.body;
+
+        if (!id || !password || !name) {
+            return res.status(400).json({ mensaje: "Faltan campos obligatorios (id, password o name)" });
+        }
+
+        // Verificar si ya existe
+        const existente = await User.findOne({ id });
+        if (existente) {
+            return res.status(409).json({ mensaje: "⚠️ Ya existe un usuario con ese email" });
+        }
 
         const nuevoUsuario = new User({
             id,
             password,
             name,
             projects: [],
-            testing: []
+            testing: [],
+            experiences: experiences || [],
+            phone: phone || "",
+            grades: grades || []
         });
 
         await nuevoUsuario.save();
 
-        // 🔄 Actualizar proyectos donde estaba como tester invitado
+        // 🔄 Vincular proyectos donde ya estaba invitado
         const proyectos = await Project.find({ "testers.id": id });
         for (const proyecto of proyectos) {
             if (!nuevoUsuario.testing.includes(proyecto.name)) {
@@ -52,11 +65,16 @@ export const crearUsuario = async (req, res) => {
 
         await nuevoUsuario.save();
 
-        res.status(201).json({ mensaje: "Usuario creado correctamente", usuario: nuevoUsuario });
+        res.status(201).json({
+            mensaje: "✅ Usuario creado correctamente",
+            usuario: nuevoUsuario
+        });
     } catch (error) {
         res.status(500).json({ mensaje: "Error al crear usuario", error: error.message });
     }
 };
+
+// ✅ Login de usuario
 export const loginUsuario = async (req, res) => {
     try {
         const { id, password } = req.body;
@@ -65,18 +83,15 @@ export const loginUsuario = async (req, res) => {
             return res.status(400).json({ message: "Faltan campos obligatorios" });
         }
 
-        // Buscar usuario por email
         const usuario = await User.findOne({ id });
         if (!usuario) {
             return res.status(404).json({ message: "Usuario no encontrado" });
         }
 
-        // Verificar contraseña
         if (usuario.password !== password) {
             return res.status(401).json({ message: "Contraseña incorrecta" });
         }
 
-        // ✅ Login exitoso
         res.status(200).json({
             message: "Login exitoso",
             usuario: {
@@ -84,14 +99,15 @@ export const loginUsuario = async (req, res) => {
                 name: usuario.name,
                 projects: usuario.projects,
                 testing: usuario.testing,
-            },
+                experiences: usuario.experiences,
+                phone: usuario.phone,
+                grades: usuario.grades
+            }
         });
     } catch (error) {
-        console.error("Error en login:", error);
         res.status(500).json({ message: "Error en login", error: error.message });
     }
 };
-
 
 // ✅ Eliminar usuario por email
 export const eliminarUsuarioPorEmail = async (req, res) => {

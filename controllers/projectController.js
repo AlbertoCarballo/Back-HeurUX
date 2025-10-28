@@ -8,12 +8,10 @@ export const createProject = async (req, res) => {
     try {
         const { name, URL, description, complexity, creatorEmail, testersEmails = [] } = req.body;
 
-        // Validar campos obligatorios
         if (!name || !URL || !description || !complexity || !creatorEmail) {
             return res.status(400).json({ message: "Faltan campos obligatorios" });
         }
 
-        // Buscar o crear el usuario creador
         let creator = await User.findOne({ id: creatorEmail });
         if (!creator) {
             creator = new User({
@@ -26,33 +24,29 @@ export const createProject = async (req, res) => {
             await creator.save();
         }
 
-        // Crear el proyecto
         const newProject = new Project({
             name,
             URL,
             description,
             complexity,
-            creator: creator.id, // guardamos email
+            creator: creator.id,
             testers: []
         });
 
-        // Procesar testers
         for (const email of testersEmails) {
-            // Siempre agregamos al proyecto
             newProject.testers.push({ id: email, answers: [] });
 
-            // Si el usuario existe, actualizar su arreglo testing
             const tester = await User.findOne({ id: email });
             if (tester) {
-                tester.testing.push(newProject.name);
-                await tester.save();
+                if (!tester.testing.includes(newProject.name)) {
+                    tester.testing.push(newProject.name);
+                    await tester.save();
+                }
             }
         }
 
-        // Guardar el proyecto
         await newProject.save();
 
-        // Asociar el proyecto al creador
         creator.projects.push(newProject.name);
         await creator.save();
 
@@ -79,11 +73,12 @@ export const getAllProjects = async (req, res) => {
 };
 
 /**
- * Obtener un proyecto por su ID
+ * Obtener un proyecto por nombre
  */
-export const getProjectById = async (req, res) => {
+export const getProjectByName = async (req, res) => {
     try {
-        const project = await Project.findById(req.params.id);
+        const { name } = req.params;
+        const project = await Project.findOne({ name });
         if (!project) return res.status(404).json({ message: "Proyecto no encontrado" });
         res.status(200).json(project);
     } catch (error) {
@@ -92,16 +87,16 @@ export const getProjectById = async (req, res) => {
 };
 
 /**
- * Actualizar un proyecto por ID
+ * Actualizar un proyecto por nombre
  */
 export const updateProject = async (req, res) => {
     try {
-        const { id } = req.params;
-        const { name, URL, description, complexity } = req.body;
+        const { name } = req.params;
+        const { URL, description, complexity } = req.body;
 
-        const updatedProject = await Project.findByIdAndUpdate(
-            id,
-            { name, URL, description, complexity },
+        const updatedProject = await Project.findOneAndUpdate(
+            { name },
+            { URL, description, complexity },
             { new: true }
         );
 
@@ -119,27 +114,94 @@ export const updateProject = async (req, res) => {
 };
 
 /**
- * Eliminar un proyecto y removerlo del usuario creador
+ * Eliminar un proyecto por nombre
  */
 export const deleteProject = async (req, res) => {
     try {
-        const { id } = req.params;
-        const project = await Project.findById(id);
+        const { name } = req.params;
+        const project = await Project.findOne({ name });
         if (!project) return res.status(404).json({ message: "Proyecto no encontrado" });
 
-        // Eliminar la referencia del creador (por email)
         await User.updateOne({ id: project.creator }, { $pull: { projects: project.name } });
 
-        // Eliminar la referencia del proyecto en testers
         for (const tester of project.testers) {
             await User.updateOne({ id: tester.id }, { $pull: { testing: project.name } });
         }
 
-        // Eliminar el proyecto
-        await Project.findByIdAndDelete(id);
+        await Project.deleteOne({ name });
 
         res.status(200).json({ message: "Proyecto eliminado correctamente" });
     } catch (error) {
         res.status(500).json({ message: "Error al eliminar proyecto", error });
+    }
+};
+
+/**
+ * Registrar respuestas de una sección por nombre del proyecto
+ * Recibe:
+ *  - projectName (en params)
+ *  - testerEmail
+ *  - section (1–15)
+ *  - answers: ["si", "no", "neither"]
+ *  - descriptions: ["texto1", "texto2", ...]
+ */
+export const addSectionAnswers = async (req, res) => {
+    try {
+        const { projectName } = req.params;
+        const { testerEmail, section, answers, descriptions } = req.body;
+
+        if (!testerEmail || !section || !answers || !Array.isArray(answers)) {
+            return res.status(400).json({ message: "Datos incompletos" });
+        }
+
+        const project = await Project.findOne({ name: projectName });
+        if (!project) return res.status(404).json({ message: "Proyecto no encontrado" });
+
+        const tester = project.testers.find(t => t.id === testerEmail);
+        if (!tester) {
+            return res.status(404).json({ message: "Tester no encontrado en este proyecto" });
+        }
+
+        // Convertir respuestas a números
+        const numericAnswers = answers.map(resp => {
+            switch (resp.toLowerCase()) {
+                case "si": return 1;
+                case "no": return 0;
+                case "neither": return 0.5;
+                default: return 0;
+            }
+        });
+
+        const sectionKey = `section${section}`;
+        const descKey = `description${section}`;
+
+        if (!tester.answers.length) tester.answers.push({});
+
+        let respuesta = tester.answers[0];
+        respuesta[sectionKey] = numericAnswers;
+        respuesta[descKey] = descriptions || [];
+
+        // Calcular resultado total
+        const total = numericAnswers.reduce((acc, val) => acc + val, 0);
+
+        if (!respuesta.results) respuesta.results = [];
+        respuesta.results.push(total);
+
+        // Calcular promedio general
+        const promedio = respuesta.results.reduce((a, b) => a + b, 0) / respuesta.results.length;
+        respuesta.average = Number(promedio.toFixed(2));
+
+        await project.save();
+
+        res.status(200).json({
+            message: `Sección ${section} guardada correctamente`,
+            tester: testerEmail,
+            results: respuesta.results,
+            average: respuesta.average
+        });
+
+    } catch (error) {
+        console.error("❌ Error al guardar sección:", error);
+        res.status(500).json({ message: "Error al guardar respuestas", error: error.message });
     }
 };

@@ -2,17 +2,30 @@ import express from "express";
 import {
     createProject,
     getAllProjects,
-    getProjectById,
+    getProjectByName,
     updateProject,
     deleteProject,
+    addSectionAnswers
 } from "../controllers/projectController.js";
 
 const router = express.Router();
 
-router.post("/", createProject);            // Crear proyecto
-router.get("/", getAllProjects);            // Obtener todos los proyectos
-router.get("/:id", getProjectById);         // Obtener uno
-router.put("/:id", updateProject);          // Actualizar
-router.delete("/:id", deleteProject);       // Eliminar
+// Crear un proyecto
+router.post("/", createProject);
+
+// Obtener todos los proyectos
+router.get("/", getAllProjects);
+
+// Obtener un proyecto por nombre
+router.get("/:name", getProjectByName);
+
+// Actualizar un proyecto por nombre
+router.put("/:name", updateProject);
+
+// Eliminar un proyecto por nombre
+router.delete("/:name", deleteProject);
+
+// Registrar respuestas de una sección
+router.post("/:projectName/section", addSectionAnswers);
 
 export default router;
