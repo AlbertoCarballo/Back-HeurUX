@@ -5,7 +5,8 @@ import dotenv from "dotenv";
 
 // Rutas
 import userRoutes from "./routes/userRoute.js";
-import projectRoutes from "./routes/projectRoutes.js"; // 👈 nueva ruta
+import projectRoutes from "./routes/projectRoutes.js";
+import emailRoutes from "./routes/emailRoutes.js"; // 👈 nueva importación
 
 dotenv.config();
 
@@ -22,7 +23,8 @@ mongoose.connect(process.env.MONGO_URI)
 
 // Rutas principales
 app.use("/api/usuarios", userRoutes);
-app.use("/api/projects", projectRoutes); // 👈 aquí se agregan los proyectos
+app.use("/api/projects", projectRoutes);
+app.use("/api/email", emailRoutes); // 👈 nueva ruta para correos
 
 // Ruta base
 app.get("/", (req, res) => {
