@@ -30,27 +30,30 @@ export const obtenerUsuarioPorEmail = async (req, res) => {
 // ✅ Crear un nuevo usuario (con campos opcionales)
 export const crearUsuario = async (req, res) => {
     try {
-        const { id, password, name, experiences, phone, grades } = req.body;
+        const { id, password, name, dob, experiences, phone, grades } = req.body;
 
+        // Validación de campos obligatorios
         if (!id || !password || !name) {
             return res.status(400).json({ mensaje: "Faltan campos obligatorios (id, password o name)" });
         }
 
-        // Verificar si ya existe
+        // Verificar si ya existe ese correo
         const existente = await User.findOne({ id });
         if (existente) {
             return res.status(409).json({ mensaje: "⚠️ Ya existe un usuario con ese email" });
         }
 
+        // Crear usuario
         const nuevoUsuario = new User({
             id,
-            password,
+            password, // 👈 más adelante lo encriptamos
             name,
-            projects: [],
-            testing: [],
+            dob: dob || null,
             experiences: experiences || [],
-            phone: phone || "",
-            grades: grades || []
+            phone: phone ? [phone] : [], // 👈 ahora sí va como array
+            grades: grades || [],
+            projects: [],
+            testing: []
         });
 
         await nuevoUsuario.save();
@@ -65,14 +68,17 @@ export const crearUsuario = async (req, res) => {
 
         await nuevoUsuario.save();
 
+        // ✅ Respuesta
         res.status(201).json({
             mensaje: "✅ Usuario creado correctamente",
             usuario: nuevoUsuario
         });
+
     } catch (error) {
         res.status(500).json({ mensaje: "Error al crear usuario", error: error.message });
     }
 };
+
 
 // ✅ Login de usuario
 export const loginUsuario = async (req, res) => {
