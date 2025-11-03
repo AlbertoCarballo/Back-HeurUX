@@ -6,6 +6,7 @@ import {
     eliminarUsuarioPorEmail,
     loginUsuario     // <- importamos la función de login
 } from "../controllers/userController.js";
+import { authMiddleware } from "../middleware/Auth.js";
 
 const router = express.Router();
 
@@ -15,5 +16,7 @@ router.get("/:email", obtenerUsuarioPorEmail);
 router.post("/", crearUsuario);                     
 router.post("/login", loginUsuario);               // <- ruta de login
 router.delete("/:email", eliminarUsuarioPorEmail);  
+router.get("/perfil", authMiddleware, obtenerUsuarioPorEmail);
+
 
 export default router;

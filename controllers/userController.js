@@ -1,7 +1,9 @@
 import User from "../models/Users.js";
 import Project from "../models/Project.js";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt"; // (opcional futura encriptación)
 
-// ✅ Obtener todos los usuarios
+// Obtener todos los usuarios
 export const obtenerUsuarios = async (req, res) => {
     try {
         const usuarios = await User.find();
@@ -11,7 +13,7 @@ export const obtenerUsuarios = async (req, res) => {
     }
 };
 
-// ✅ Obtener un usuario por email
+// Obtener usuario por email
 export const obtenerUsuarioPorEmail = async (req, res) => {
     try {
         const { email } = req.params;
@@ -27,30 +29,31 @@ export const obtenerUsuarioPorEmail = async (req, res) => {
     }
 };
 
-// ✅ Crear un nuevo usuario (con campos opcionales)
+// Crear usuario
 export const crearUsuario = async (req, res) => {
     try {
         const { id, password, name, dob, experiences, phone, grades } = req.body;
 
-        // Validación de campos obligatorios
         if (!id || !password || !name) {
             return res.status(400).json({ mensaje: "Faltan campos obligatorios (id, password o name)" });
         }
 
-        // Verificar si ya existe ese correo
         const existente = await User.findOne({ id });
         if (existente) {
             return res.status(409).json({ mensaje: "⚠️ Ya existe un usuario con ese email" });
         }
 
-        // Crear usuario
+        // const hashedPass = await bcrypt.hash(password, 10); // (cuando lo actives)
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
         const nuevoUsuario = new User({
             id,
-            password, // 👈 más adelante lo encriptamos
+            password: hashedPassword,   // ← guardas el hash
             name,
             dob: dob || null,
             experiences: experiences || [],
-            phone: phone ? [phone] : [], // 👈 ahora sí va como array
+            phone: phone ? [phone] : [],
             grades: grades || [],
             projects: [],
             testing: []
@@ -58,20 +61,21 @@ export const crearUsuario = async (req, res) => {
 
         await nuevoUsuario.save();
 
-        // 🔄 Vincular proyectos donde ya estaba invitado
+        // Vincular si ya estaba invitado a proyectos
         const proyectos = await Project.find({ "testers.id": id });
         for (const proyecto of proyectos) {
             if (!nuevoUsuario.testing.includes(proyecto.name)) {
                 nuevoUsuario.testing.push(proyecto.name);
             }
         }
-
         await nuevoUsuario.save();
 
-        // ✅ Respuesta
         res.status(201).json({
             mensaje: "✅ Usuario creado correctamente",
-            usuario: nuevoUsuario
+            usuario: {
+                id: nuevoUsuario.id,
+                name: nuevoUsuario.name
+            }
         });
 
     } catch (error) {
@@ -79,8 +83,7 @@ export const crearUsuario = async (req, res) => {
     }
 };
 
-
-// ✅ Login de usuario
+// Login con JWT + cookie HTTPOnly
 export const loginUsuario = async (req, res) => {
     try {
         const { id, password } = req.body;
@@ -94,28 +97,45 @@ export const loginUsuario = async (req, res) => {
             return res.status(404).json({ message: "Usuario no encontrado" });
         }
 
-        if (usuario.password !== password) {
+        // ⚠️ Temporal hasta activar bcrypt
+        const validPass = await bcrypt.compare(password, usuario.password);
+        if (!validPass) {
             return res.status(401).json({ message: "Contraseña incorrecta" });
         }
 
-        res.status(200).json({
-            message: "Login exitoso",
+        const token = jwt.sign(
+            { id: usuario.id, name: usuario.name },
+            process.env.JWT_SECRET,
+            { expiresIn: "2h" }
+        );
+
+        // ✅ Cookie HTTPOnly
+        res.cookie("token", token, {
+            httpOnly: true,
+            secure: false, // Cambiar a true en producción HTTPS
+            sameSite: "lax",
+            maxAge: 2 * 60 * 60 * 1000 // 2h
+        });
+
+        // ✅ Mandar token también al front
+        return res.status(200).json({
+            message: "✅ Login exitoso",
+            token,
             usuario: {
                 id: usuario.id,
-                name: usuario.name,
-                projects: usuario.projects,
-                testing: usuario.testing,
-                experiences: usuario.experiences,
-                phone: usuario.phone,
-                grades: usuario.grades
+                name: usuario.name
             }
         });
+
     } catch (error) {
-        res.status(500).json({ message: "Error en login", error: error.message });
+        return res.status(500).json({
+            message: "Error en login",
+            error: error.message
+        });
     }
 };
 
-// ✅ Eliminar usuario por email
+// Eliminar usuario
 export const eliminarUsuarioPorEmail = async (req, res) => {
     try {
         const { email } = req.params;
