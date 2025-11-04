@@ -7,14 +7,21 @@ import cookieParser from "cookie-parser";
 // Rutas
 import userRoutes from "./routes/userRoute.js";
 import projectRoutes from "./routes/projectRoutes.js";
-import emailRoutes from "./routes/emailRoutes.js"; // 👈 nueva importación
+import emailRoutes from "./routes/emailRoutes.js";
 
 dotenv.config();
 
-const app = express(); // ← primero declaras app
+const app = express();
+
+// ✅ CORS config correcto para cookies
+app.use(
+    cors({
+        origin: "http://localhost:3000",  // URL del front
+        credentials: true,                // Permitir envío de cookies
+    })
+);
 
 // Middlewares
-app.use(cors());
 app.use(express.json());
 app.use(cookieParser());
 
@@ -23,16 +30,22 @@ mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("✅ Conectado a MongoDB"))
     .catch((err) => console.error("❌ Error al conectar a MongoDB:", err));
 
-// Rutas principales
+// ✅ Header extra para cookies y métodos
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE");
+    next();
+});
+
+// Rutas
 app.use("/api/usuarios", userRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/email", emailRoutes);
 
-// Ruta base
 app.get("/", (req, res) => {
     res.send("🚀 API funcionando correctamente");
 });
 
-// Servidor
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`🚀 Servidor corriendo en puerto ${PORT}`));
