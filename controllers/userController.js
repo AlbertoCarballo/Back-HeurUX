@@ -5,148 +5,168 @@ import bcrypt from "bcrypt"; // (opcional futura encriptación)
 
 // Obtener todos los usuarios
 export const obtenerUsuarios = async (req, res) => {
-    try {
-        const usuarios = await User.find();
-        res.status(200).json(usuarios);
-    } catch (error) {
-        res.status(500).json({ mensaje: "Error al obtener usuarios", error: error.message });
-    }
+  try {
+    const usuarios = await User.find();
+    res.status(200).json(usuarios);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ mensaje: "Error al obtener usuarios", error: error.message });
+  }
 };
 
 // Obtener usuario por email
 export const obtenerUsuarioPorEmail = async (req, res) => {
-    try {
-        const { email } = req.params;
-        const usuario = await User.findOne({ id: email });
+  try {
+    const { email } = req.params;
+    const usuario = await User.findOne({ id: email });
 
-        if (!usuario) {
-            return res.status(404).json({ mensaje: "⚠️ Usuario no encontrado" });
-        }
-
-        res.status(200).json(usuario);
-    } catch (error) {
-        res.status(500).json({ mensaje: "Error al buscar usuario", error: error.message });
+    if (!usuario) {
+      return res.status(404).json({ mensaje: "⚠️ Usuario no encontrado" });
     }
+
+    res.status(200).json(usuario);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ mensaje: "Error al buscar usuario", error: error.message });
+  }
 };
 
 // Crear usuario
 export const crearUsuario = async (req, res) => {
-    try {
-        const { id, password, name, dob, experiences, phone, grades } = req.body;
+  try {
+    const { id, password, name, dob, experiences, phone, grades } = req.body;
 
-        if (!id || !password || !name) {
-            return res.status(400).json({ mensaje: "Faltan campos obligatorios (id, password o name)" });
-        }
-
-        const existente = await User.findOne({ id });
-        if (existente) {
-            return res.status(409).json({ mensaje: "⚠️ Ya existe un usuario con ese email" });
-        }
-
-        // const hashedPass = await bcrypt.hash(password, 10); // (cuando lo actives)
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-
-        const nuevoUsuario = new User({
-            id,
-            password: hashedPassword,   // ← guardas el hash
-            name,
-            dob: dob || null,
-            experiences: experiences || [],
-            phone: phone ? [phone] : [],
-            grades: grades || [],
-            projects: [],
-            testing: []
-        });
-
-        await nuevoUsuario.save();
-
-        // Vincular si ya estaba invitado a proyectos
-        const proyectos = await Project.find({ "testers.id": id });
-        for (const proyecto of proyectos) {
-            if (!nuevoUsuario.testing.includes(proyecto.name)) {
-                nuevoUsuario.testing.push(proyecto.name);
-            }
-        }
-        await nuevoUsuario.save();
-
-        res.status(201).json({
-            mensaje: "✅ Usuario creado correctamente",
-            usuario: {
-                id: nuevoUsuario.id,
-                name: nuevoUsuario.name
-            }
-        });
-
-    } catch (error) {
-        res.status(500).json({ mensaje: "Error al crear usuario", error: error.message });
+    if (!id || !password || !name) {
+      return res
+        .status(400)
+        .json({ mensaje: "Faltan campos obligatorios (id, password o name)" });
     }
+
+    const existente = await User.findOne({ id });
+    if (existente) {
+      return res
+        .status(409)
+        .json({ mensaje: "⚠️ Ya existe un usuario con ese email" });
+    }
+
+    // const hashedPass = await bcrypt.hash(password, 10); // (cuando lo actives)
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const nuevoUsuario = new User({
+      id,
+      password: hashedPassword, // ← guardas el hash
+      name,
+      dob: dob || null,
+      experiences: experiences || [],
+      phone: phone ? [phone] : [],
+      grades: grades || [],
+      projects: [],
+      testing: [],
+    });
+
+    await nuevoUsuario.save();
+
+    // Vincular si ya estaba invitado a proyectos
+    const proyectos = await Project.find({ "testers.id": id });
+    for (const proyecto of proyectos) {
+      if (!nuevoUsuario.testing.includes(proyecto.name)) {
+        nuevoUsuario.testing.push(proyecto.name);
+      }
+    }
+    await nuevoUsuario.save();
+
+    res.status(201).json({
+      mensaje: "✅ Usuario creado correctamente",
+      usuario: {
+        id: nuevoUsuario.id,
+        name: nuevoUsuario.name,
+      },
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ mensaje: "Error al crear usuario", error: error.message });
+  }
 };
 
-// Login con JWT + cookie HTTPOnly
+// LOGIN
 export const loginUsuario = async (req, res) => {
-    try {
-        const { id, password } = req.body;
+  try {
+    const { id, password } = req.body;
+    const usuario = await User.findOne({ id: new RegExp(`^${id}$`, "i") });
 
-        if (!id || !password) {
-            return res.status(400).json({ message: "Faltan campos obligatorios" });
-        }
+    if (!usuario)
+      return res.status(404).json({ message: "Usuario no encontrado" });
 
-        const usuario = await User.findOne({ id });
-        if (!usuario) {
-            return res.status(404).json({ message: "Usuario no encontrado" });
-        }
+    const validPass = await bcrypt.compare(password, usuario.password);
+    if (!validPass)
+      return res.status(401).json({ message: "Contraseña incorrecta" });
 
-        // ⚠️ Temporal hasta activar bcrypt
-        const validPass = await bcrypt.compare(password, usuario.password);
-        if (!validPass) {
-            return res.status(401).json({ message: "Contraseña incorrecta" });
-        }
+    const token = jwt.sign(
+      { id: usuario.id, name: usuario.name },
+      process.env.JWT_SECRET,
+      { expiresIn: "2h" }
+    );
 
-        const token = jwt.sign(
-            { id: usuario.id, name: usuario.name },
-            process.env.JWT_SECRET,
-            { expiresIn: "2h" }
-        );
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      maxAge: 2 * 60 * 60 * 1000,
+    });
 
-        // ✅ Cookie HTTPOnly
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: false, // Cambiar a true en producción HTTPS
-            sameSite: "lax",
-            maxAge: 2 * 60 * 60 * 1000 // 2h
-        });
+    return res.status(200).json({
+      message: "✅ Login exitoso",
+      token,
+      usuario: { id: usuario.id, name: usuario.name },
+    });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Error en login", error: error.message });
+  }
+};
 
-        // ✅ Mandar token también al front
-        return res.status(200).json({
-            message: "✅ Login exitoso",
-            token,
-            usuario: {
-                id: usuario.id,
-                name: usuario.name
-            }
-        });
+// VERIFY
+export const verifyUsuario = async (req, res) => {
+  try {
+    const user = req.user;
+    res.status(200).json({
+      message: "✅ Token válido",
+      usuario: user,
+    });
+  } catch (error) {
+    res.status(401).json({ message: "Token inválido o expirado" });
+  }
+};
 
-    } catch (error) {
-        return res.status(500).json({
-            message: "Error en login",
-            error: error.message
-        });
-    }
+// LOGOUT
+export const logoutUsuario = (req, res) => {
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  });
+  return res.status(200).json({ message: "✅ Sesión cerrada" });
 };
 
 // Eliminar usuario
 export const eliminarUsuarioPorEmail = async (req, res) => {
-    try {
-        const { email } = req.params;
-        const usuarioEliminado = await User.findOneAndDelete({ id: email });
+  try {
+    const { email } = req.params;
+    const usuarioEliminado = await User.findOneAndDelete({ id: email });
 
-        if (!usuarioEliminado) {
-            return res.status(404).json({ mensaje: "⚠️ Usuario no encontrado" });
-        }
-
-        res.json({ mensaje: `🗑️ Usuario ${email} eliminado correctamente` });
-    } catch (error) {
-        res.status(500).json({ mensaje: "Error al eliminar usuario", error: error.message });
+    if (!usuarioEliminado) {
+      return res.status(404).json({ mensaje: "⚠️ Usuario no encontrado" });
     }
+
+    res.json({ mensaje: `🗑️ Usuario ${email} eliminado correctamente` });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ mensaje: "Error al eliminar usuario", error: error.message });
+  }
 };
