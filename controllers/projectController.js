@@ -205,3 +205,38 @@ export const addSectionAnswers = async (req, res) => {
         res.status(500).json({ message: "Error al guardar respuestas", error: error.message });
     }
 };
+/**
+ * Obtener todos los proyectos creados por un usuario específico (por email)
+ */
+export const getProjectsByUserEmail = async (req, res) => {
+    try {
+        const { email } = req.params;
+
+        if (!email) {
+            return res.status(400).json({ message: "Debe proporcionar un email" });
+        }
+
+        // Buscar el usuario por su ID (que usas como correo)
+        const user = await User.findOne({ id: email });
+        if (!user) {
+            return res.status(404).json({ message: "Usuario no encontrado" });
+        }
+
+        // Buscar los proyectos donde el creador sea este usuario
+        const projects = await Project.find({ creator: user.id });
+
+        res.status(200).json({
+            success: true,
+            count: projects.length,
+            projects,
+        });
+    } catch (error) {
+        console.error("❌ Error al obtener proyectos del usuario:", error);
+        res.status(500).json({
+            success: false,
+            message: "Error al obtener proyectos del usuario",
+            error: error.message,
+        });
+    }
+};
+

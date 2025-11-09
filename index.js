@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
+import sectionRoutes from "./routes/sectionRoutes.js";
+
 
 // Rutas
 import userRoutes from "./routes/userRoute.js";
@@ -42,6 +44,8 @@ app.use((req, res, next) => {
 app.use("/api/usuarios", userRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/email", emailRoutes);
+app.use("/api/sections", sectionRoutes);
+
 
 app.get("/", (req, res) => {
     res.send("🚀 API funcionando correctamente");
