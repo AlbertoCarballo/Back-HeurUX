@@ -7,6 +7,7 @@ import {
   loginUsuario,
   verifyUsuario,
   logoutUsuario,
+  informacionUsuario,
 } from "../controllers/userController.js";
 import { authMiddleware } from "../middleware/Auth.js";
 
@@ -16,6 +17,7 @@ const router = express.Router();
 router.post("/login", loginUsuario);
 router.get("/verify", authMiddleware, verifyUsuario);
 router.post("/logout", logoutUsuario);
+router.get("/me", authMiddleware, informacionUsuario);
 
 // 🧭 Luego las rutas genéricas
 router.get("/", obtenerUsuarios);

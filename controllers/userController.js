@@ -14,6 +14,21 @@ export const obtenerUsuarios = async (req, res) => {
       .json({ mensaje: "Error al obtener usuarios", error: error.message });
   }
 };
+export const informacionUsuario = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await Usuario.findOne({ id: userId }).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    res.status(200).json(user);
+  } catch (error) {
+    console.error("Error al obtener usuario:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
 
 // Obtener usuario por email
 export const obtenerUsuarioPorEmail = async (req, res) => {
