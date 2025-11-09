@@ -66,7 +66,8 @@ export const obtenerUsuarioPorEmail = async (req, res) => {
 // Crear usuario
 export const crearUsuario = async (req, res) => {
   try {
-    const { id, password, name, dob, experiences, phone, grades } = req.body;
+    const { id, password, name, profession, dob, experiences, phone, grades } =
+      req.body;
 
     if (!id || !password || !name) {
       return res
@@ -90,6 +91,7 @@ export const crearUsuario = async (req, res) => {
       password: hashedPassword, // ← guardas el hash
       name,
       dob: dob || null,
+      profession: profession || "",
       experiences: experiences || [],
       phone: phone ? [phone] : [],
       grades: grades || [],
