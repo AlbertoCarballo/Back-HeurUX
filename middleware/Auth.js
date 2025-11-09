@@ -8,7 +8,6 @@ import jwt from "jsonwebtoken";
  */
 export const authMiddleware = (req, res, next) => {
   try {
-    // 🔍 Buscar el token en cookies o encabezados
     const token =
       req.cookies?.token ||
       (req.headers.authorization?.startsWith("Bearer ")
@@ -16,38 +15,31 @@ export const authMiddleware = (req, res, next) => {
         : null);
 
     if (!token) {
+      console.log("🚫 authMiddleware: no token recibido");
       return res
         .status(401)
-        .json({ message: "🚫 No autorizado, token faltante" });
+        .json({ message: "No autorizado - token faltante" });
     }
 
-    // ✅ Verificar token
+    console.log("🔐 authMiddleware: token recibido:", token);
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log("🔍 authMiddleware: token decodificado:", decoded);
 
-    // ✅ Guardar datos decodificados para siguientes middlewares/controladores
     req.user = decoded;
-
-    // Opcional: log útil en desarrollo
-    if (process.env.NODE_ENV !== "production") {
-      console.log("🟢 Token verificado para:", decoded.id);
-    }
-
     next();
   } catch (error) {
-    // Manejo de errores comunes de JWT
+    console.error("❌ authMiddleware error:", error);
     if (error.name === "TokenExpiredError") {
-      return res
-        .status(401)
-        .json({ message: "⏰ Token expirado, vuelve a iniciar sesión" });
+      return res.status(401).json({ message: "Token expirado" });
     } else if (error.name === "JsonWebTokenError") {
-      return res.status(401).json({ message: "❌ Token inválido" });
-    } else {
-      return res
-        .status(500)
-        .json({
-          message: "⚠️ Error interno en autenticación",
-          error: error.message,
-        });
+      return res.status(401).json({ message: "Token inválido" });
     }
+    return res
+      .status(500)
+      .json({
+        message: "Error interno en authMiddleware",
+        error: error.message,
+      });
   }
 };

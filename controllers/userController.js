@@ -16,17 +16,32 @@ export const obtenerUsuarios = async (req, res) => {
 };
 export const informacionUsuario = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const user = await Usuario.findOne({ id: userId }).select("-password");
+    console.log("➡️ obtenerUsuarioActual: req.user =", req.user);
 
-    if (!user) {
+    const userId = req.user?.id;
+    if (!userId) {
+      console.log("⚠️ obtenerUsuarioActual: no hay req.user.id");
+      return res
+        .status(401)
+        .json({ message: "Token inválido o usuario no autenticado" });
+    }
+
+    // Buscar tolerante a mayúsculas (por si guardaste el id en minúsculas)
+    const usuario = await User.findOne({
+      id: new RegExp(`^${userId}$`, "i"),
+    }).select("-password");
+    console.log("🔎 obtenerUsuarioActual: usuario encontrado =>", usuario);
+
+    if (!usuario) {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
-    res.status(200).json(user);
+    return res.status(200).json(usuario);
   } catch (error) {
-    console.error("Error al obtener usuario:", error);
-    res.status(500).json({ message: "Error interno del servidor" });
+    console.error("❌ Error en obtenerUsuarioActual:", error);
+    return res
+      .status(500)
+      .json({ message: "Error interno del servidor", error: error.message });
   }
 };
 
