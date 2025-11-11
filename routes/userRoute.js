@@ -8,6 +8,8 @@ import {
   verifyUsuario,
   logoutUsuario,
   informacionUsuario,
+  inviteFriend,
+  getFriends,
 } from "../controllers/userController.js";
 import { authMiddleware } from "../middleware/Auth.js";
 
@@ -18,7 +20,8 @@ router.post("/login", loginUsuario);
 router.get("/verify", authMiddleware, verifyUsuario);
 router.post("/logout", logoutUsuario);
 router.get("/me", authMiddleware, informacionUsuario);
-
+router.post("/inviteFriend", authMiddleware, inviteFriend);
+router.get("/friends", authMiddleware, getFriends);
 // 🧭 Luego las rutas genéricas
 router.get("/", obtenerUsuarios);
 router.get("/:email", obtenerUsuarioPorEmail);

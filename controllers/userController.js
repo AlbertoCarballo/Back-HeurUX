@@ -2,7 +2,7 @@ import User from "../models/Users.js";
 import Project from "../models/Project.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt"; // (opcional futura encriptación)
-
+import { sendInvitationEmail } from "./emailController.js";
 // Obtener todos los usuarios
 export const obtenerUsuarios = async (req, res) => {
   try {
@@ -42,6 +42,29 @@ export const informacionUsuario = async (req, res) => {
     return res
       .status(500)
       .json({ message: "Error interno del servidor", error: error.message });
+  }
+};
+
+export const getFriends = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) return res.status(401).json({ message: "No autenticado" });
+
+    const user = await User.findOne({ id: userId });
+
+    if (!user)
+      return res.status(404).json({ message: "Usuario no encontrado" });
+
+    // Buscar info de cada amigo
+    const friends = await User.find({ id: { $in: user.friends } })
+      .select("id name")
+      .lean();
+
+    res.status(200).json({ friends });
+  } catch (error) {
+    console.error("❌ Error al obtener amigos:", error);
+    res.status(500).json({ message: "Error interno", error: error.message });
   }
 };
 
@@ -200,5 +223,68 @@ export const eliminarUsuarioPorEmail = async (req, res) => {
     res
       .status(500)
       .json({ mensaje: "Error al eliminar usuario", error: error.message });
+  }
+};
+
+export const inviteFriend = async (req, res) => {
+  try {
+    const userId = req.user?.id; // Usuario autenticado (del JWT)
+    const { friendEmail } = req.body;
+
+    if (!userId || !friendEmail) {
+      return res.status(400).json({ message: "Datos incompletos" });
+    }
+
+    // Verificar si existe el usuario invitador
+    const inviter = await User.findOne({ id: userId });
+    if (!inviter)
+      return res.status(404).json({ message: "Usuario no encontrado" });
+
+    // Verificar si ya existe el invitado
+    let friend = await User.findOne({ id: friendEmail });
+    const friendExists = !!friend;
+
+    if (!friend) {
+      friend = new User({
+        id: friendEmail,
+        name: "Invitado",
+        password: "TEMP_INVITE_PASSWORD",
+        needsRegistration: true,
+        projects: [],
+        testing: [],
+        friends: [],
+      });
+      await friend.save();
+    }
+
+    // ✅ Agregar amistad (pendiente si invitado nuevo)
+    if (!friend.friends.includes(userId)) {
+      friend.friends.push(userId);
+      await friend.save();
+    }
+
+    if (!inviter.friends.includes(friendEmail)) {
+      inviter.friends.push(friendEmail);
+      await inviter.save();
+    }
+
+    // ✅ link de invitación
+    const inviteLink = friendExists
+      ? `${process.env.FRONTEND_URL}/login?addfriend=${userId}`
+      : `${process.env.FRONTEND_URL}/register?friend=${userId}&email=${friendEmail}`;
+
+    // ✅ enviar correo
+    await sendInvitationEmail(
+      friendEmail,
+      inviter.name || "Un usuario de HeurUX",
+      inviteLink
+    );
+
+    res.status(200).json({
+      message: "✅ Invitación enviada correctamente",
+    });
+  } catch (error) {
+    console.error("❌ Error invitando amigo:", error);
+    res.status(500).json({ message: "Error al invitar amigo" });
   }
 };

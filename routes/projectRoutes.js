@@ -1,17 +1,18 @@
 import express from "express";
 import {
-    createProject,
-    getAllProjects,
-    getProjectByName,
-    updateProject,
-    deleteProject,
-    addSectionAnswers,
-    getProjectsByUserEmail, // 👈 importar el nuevo controlador
-} from "../controllers/ProjectController.js";
+  createProject,
+  getAllProjects,
+  getProjectByName,
+  updateProject,
+  deleteProject,
+  addSectionAnswers,
+  getProjectsByUserEmail, // 👈 importar el nuevo controlador
+} from "../controllers/projectController.js";
+import { authMiddleware } from "../middleware/Auth.js";
 
 const router = express.Router();
 
-router.post("/", createProject);
+router.post("/", authMiddleware, createProject);
 router.get("/", getAllProjects);
 router.get("/:name", getProjectByName);
 router.put("/:name", updateProject);
